@@ -29,15 +29,51 @@
 ---
 </div>
 
+## Sobre este fork
+
+Este fork do OpenSign facilita a assinatura de PDFs em português do Brasil e
+o acesso pelo Google.
+
+- **Português do Brasil como padrão.** A interface abre em pt-BR, com outros idiomas disponíveis no seletor.
+- **Login e cadastro pelo Google.** Quando o cadastro está habilitado, o primeiro acesso cria a conta e um espaço de trabalho próprio, sem senha manual.
+- **API do Resend.** Alternativa de envio para e-mails do sistema, incluindo verificações, redefinição de senha e mensagens com anexos.
+
+### Instalação rápida do fork
+
+Na raiz do repositório, crie o arquivo de configuração local a partir de
+`.env.example`. Preencha `.env.prod` com os dados da sua instalação e use
+`HOST_URL` para definir o endereço HTTPS do app.
+
+| Variável | Uso |
+| --- | --- |
+| `DOCSIGN_GOOGLE_CLIENT_ID` | ID público do cliente OAuth Web. Cadastre a origem HTTPS do app em **Origens JavaScript autorizadas** no Google Auth Platform. |
+| `DOCSIGN_GOOGLE_SIGNUP_ENABLED` | Use `true` para habilitar a criação de um espaço próprio no primeiro acesso com Google. |
+| `RESEND_API_KEY` | Chave de envio do Resend, usada pelo backend. |
+| `RESEND_FROM_EMAIL` | Endereço remetente de um domínio verificado no Resend. |
+
+Com **Node.js 22** e **Docker Compose**, compile o frontend e suba a
+instalação com o arquivo adicional do fork.
+
+```sh
+(cd apps/OpenSign && npm ci && npm run build)
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.fork.yml up -d
+```
+
+Em uma instalação nova, conclua a configuração inicial do administrador em
+uma rede privada antes de abrir o domínio. Mantenha `.env.prod` fora do Git.
+
+[Guia de configuração deste fork](INSTALLATION.md#configura%C3%A7%C3%A3o-deste-fork)
+
 ### Table of Contents
 
-1. [Introduction](#introduction)
-2. [Features](#features)
-3. [Installation](#installation)
-4. [Usage](#usage)
-5. [Contribution Guidelines](#contribution-guidelines)
-6. [License](#license)
-7. [Acknowledgments](#acknowledgments)
+1. [Sobre este fork](#sobre-este-fork)
+2. [Introduction](#introduction)
+3. [Features](#features)
+4. [Installation](#installation)
+5. [Usage](#usage)
+6. [Contribution Guidelines](#contribution-guidelines)
+7. [License](#license)
+8. [Acknowledgments](#acknowledgments)
 
 ---
 Please star ⭐ the repo to support us! 😀
