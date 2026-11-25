@@ -9,6 +9,7 @@ async function getUserDetails(request) {
       } else {
         const email = request.user.get('email');
         userQuery.equalTo('Email', email);
+        userQuery.equalTo('UserId', request.user);
       }
       userQuery.include('TenantId');
       userQuery.include('UserId');

@@ -1,12 +1,13 @@
-import { flattenPdf, getSecureUrl } from '../../Utils.js';
+import { flattenPdf, getSecureUrl, serverAppId } from '../../Utils.js';
+import { recordLocalUpload } from '../../auth/localUploadOwnership.js';
 import { parseUploadFile } from '../../utils/fileUtils.js';
+import { localFileAddress } from './getSignedUrl.js';
 
 export default async function saveFile(request) {
   if (!request.params.fileBase64) {
     throw new Parse.Error(Parse.Error.INVALID_QUERY, 'Please provide file.');
   }
   const fileBase64 = request.params.fileBase64;
-  const id = request.params.id;
   try {
     if (request.user) {
       const extCls = new Parse.Query('contracts_Users');
@@ -15,7 +16,6 @@ export default async function saveFile(request) {
       extCls.include('UserId');
       const resExt = await extCls.first({ useMasterKey: true });
       if (resExt) {
-        const _resExt = JSON.parse(JSON.stringify(resExt));
         const fileName = request.params.fileName;
         const ext = request.params.fileName?.split('.')?.pop();
         let mimeType;
@@ -38,7 +38,11 @@ export default async function saveFile(request) {
         // return { url: fileRes.url };
         try {
           const fileRes = await parseUploadFile(fileName, file, mimeType);
-          fileUrl = getSecureUrl(fileRes?.url)?.url;
+          const localAddress = localFileAddress(fileRes?.url, process.env.SERVER_URL, serverAppId);
+          if (localAddress && !(await recordLocalUpload(localAddress, request.user.id))) {
+            throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'File is unavailable.');
+          }
+          const fileUrl = getSecureUrl(fileRes?.url)?.url;
           return { url: fileUrl };
         } catch (err) {
           throw new Parse.Error(400, err?.message);

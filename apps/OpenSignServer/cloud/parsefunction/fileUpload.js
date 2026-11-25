@@ -1,13 +1,12 @@
-import { getSignedLocalUrl } from './getSignedUrl.js';
+import { serverAppId } from '../../Utils.js';
+import { localFileAddress, validateSignedLocalUrl } from './getSignedUrl.js';
 
 export default async function fileUpload(request) {
   const url = request.params.url;
 
-  try {
-    const urlwithjwt = getSignedLocalUrl(url, 200);
-    return { url: urlwithjwt };
-  } catch (err) {
-    console.log('Err ', err);
-    throw err;
+  if (!localFileAddress(url, process.env.SERVER_URL, serverAppId) ||
+      await validateSignedLocalUrl(url) === 'Unauthorized') {
+    throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, 'File is unavailable.');
   }
+  return { url };
 }

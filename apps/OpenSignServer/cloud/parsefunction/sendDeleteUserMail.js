@@ -1,3 +1,4 @@
+import { defaultSenderEmail } from '../../utils/resendEmail.js';
 import { smtpenable } from '../../Utils.js';
 import {
   buildCanonicalBrandUrl,
@@ -69,7 +70,7 @@ const sendDeleteUserMail = async req => {
     const supportLine = brand.contacts.supportEmail
       ? ` Please contact <a href="mailto:${escapeHtml(brand.contacts.supportEmail)}">${escapeHtml(brand.contacts.supportEmail)}</a>.`
       : '';
-    const mailsender = smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER;
+    const mailsender = defaultSenderEmail(smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER);
     // Render a simple HTML form. In production, consider using a templating engine.
 
     await Parse.Cloud.sendEmail({

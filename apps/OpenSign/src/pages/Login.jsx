@@ -4,9 +4,7 @@ import { useDispatch } from "react-redux";
 import axios from "axios";
 import { NavLink, useNavigate, useLocation } from "react-router";
 import ModalUi from "../primitives/ModalUi";
-import {
-  emailRegex,
-} from "../constant/const";
+import { emailRegex } from "../constant/const";
 import Alert from "../primitives/Alert";
 import { appInfo } from "../constant/appinfo";
 import { fetchAppInfo } from "../redux/reducers/infoReducer";
@@ -19,10 +17,12 @@ import {
 import Loader from "../primitives/Loader";
 import { useTranslation } from "react-i18next";
 import SelectLanguage from "../components/pdf/SelectLanguage";
+import GoogleAuthButton, {
+  isGoogleAuthEnabled
+} from "../components/GoogleAuthButton";
 
 function Login() {
-  const appName =
-    "OpenSign™";
+  const appName = "OpenSign™";
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -37,7 +37,7 @@ function Login() {
     thirdpartyLoader: false,
     contactBookOtp: "",
     contactBookOtpError: "",
-    contactBookOtpVerified: false,
+    contactBookOtpVerified: false
   });
   const [userDetails, setUserDetails] = useState({
     Company: "",
@@ -55,7 +55,6 @@ function Login() {
     checkUserExt();
   };
 
-
   const setLocalVar = (user) => {
     localStorage.setItem("accesstoken", user.sessionToken);
     localStorage.setItem("UserInformation", JSON.stringify(user));
@@ -65,6 +64,13 @@ function Login() {
     } else {
       localStorage.setItem("profileImg", "");
     }
+  };
+
+  const handleGoogleLogin = async (sessionToken) => {
+    const user = await Parse.User.become(sessionToken);
+    localStorage.setItem("appLogo", appInfo.applogo);
+    setLocalVar({ ...user.toJSON(), sessionToken });
+    await continueLoginFlow();
   };
 
   const showToast = (type, msg) => {
@@ -81,9 +87,7 @@ function Login() {
     const app = await getAppLogo();
     if (app?.error === "invalid_json") {
       setErrMsg(t("server-down", { appName: appName }));
-    } else if (
-      app?.user === "not_exist"
-    ) {
+    } else if (app?.user === "not_exist") {
       navigate("/addadmin");
     }
     if (app?.logo) {
@@ -105,10 +109,9 @@ function Login() {
     setState({ ...state, [name]: value });
   };
 
-  const handleLogin = async (
-  ) => {
-    const email = state?.email
-    const password = state?.password
+  const handleLogin = async () => {
+    const email = state?.email;
+    const password = state?.password;
 
     if (!email || !password) {
       return;
@@ -253,7 +256,7 @@ function Login() {
               localStorage.setItem("PageLanding", menu.pageId);
               localStorage.setItem("defaultmenuid", menu.menuId);
               localStorage.setItem("pageType", menu.pageType);
-                navigate(redirectUrl);
+              navigate(redirectUrl);
             } else {
               showToast("danger", t("role-not-found"));
               logOutUser();
@@ -313,7 +316,7 @@ function Login() {
             localStorage.setItem("PageLanding", menu.pageId);
             localStorage.setItem("defaultmenuid", menu.menuId);
             localStorage.setItem("pageType", menu.pageType);
-              navigate(redirectUrl);
+            navigate(redirectUrl);
           } else {
             setState({ ...state, loading: false });
             logOutUser();
@@ -335,7 +338,6 @@ function Login() {
   const togglePasswordVisibility = () => {
     setState({ ...state, passwordVisible: !state.passwordVisible });
   };
-
 
   const handleSubmitbtn = async (e) => {
     e.preventDefault();
@@ -450,8 +452,8 @@ function Login() {
             localStorage.setItem("PageLanding", menu.pageId);
             localStorage.setItem("defaultmenuid", menu.menuId);
             localStorage.setItem("pageType", menu.pageType);
-              setState({ ...state, loading: false });
-              navigate(redirectUrl);
+            setState({ ...state, loading: false });
+            navigate(redirectUrl);
           } else {
             setState({ ...state, loading: false });
             setIsModal(true);
@@ -461,8 +463,8 @@ function Login() {
           logOutUser();
         }
       } else {
-          showToast("danger", t("user-not-found"));
-          logOutUser();
+        showToast("danger", t("user-not-found"));
+        logOutUser();
       }
     } catch (error) {
       console.error("Error during login flow", error);
@@ -561,92 +563,97 @@ function Login() {
                 </div>
                 <div className="os-login-content-grid">
                   <div className="os-login-form-column">
-                    <form onSubmit={handleLoginBtn} aria-label="Login Form">
-                      <h1 id="loginHeading">{t("welcome")}</h1>
-                      <fieldset>
-                        <legend>{t("Login-to-your-account")}</legend>
-                        <div
-                          id="login-region-panel"
-                          className="os-login-fields"
-                        >
-                          <label className="block text-xs" htmlFor="email">
-                            {t("email")}
-                          </label>
-                          <input
-                            id="email"
-                            type="email"
-                            className="op-input op-input-bordered op-input-sm hover:border-base-content w-full text-xs"
-                            name="email"
-                            autoComplete="username"
-                            value={state.email}
-                            onChange={handleChange}
-                            required
-                            onInvalid={(e) =>
-                              e.target.setCustomValidity(t("input-required"))
-                            }
-                            onInput={(e) => e.target.setCustomValidity("")}
+                    <h1 id="loginHeading">{t("welcome")}</h1>
+                    <p className="os-login-intro">
+                      {t("Login-to-your-account")}
+                    </p>
+                    <div className="os-login-fields">
+                      {isGoogleAuthEnabled() && (
+                        <>
+                          <GoogleAuthButton
+                            mode="login"
+                            onSuccess={handleGoogleLogin}
                           />
-                          <hr className="my-1 border-none" />
-                              <label
-                                className="block text-xs"
-                                htmlFor="password"
-                              >
-                                {t("password")}
-                              </label>
-                              <div className="relative">
-                                <input
-                                  id="password"
-                                  type={
-                                    state.passwordVisible ? "text" : "password"
-                                  }
-                                  className="op-input op-input-bordered op-input-sm hover:border-base-content w-full text-xs"
-                                  name="password"
-                                  value={state.password}
-                                  autoComplete="current-password"
-                                  onChange={handleChange}
-                                  onInvalid={(e) =>
-                                    e.target.setCustomValidity(
-                                      t("input-required")
-                                    )
-                                  }
-                                  onInput={(e) =>
-                                    e.target.setCustomValidity("")
-                                  }
-                                  required
-                                />
-                                <button
-                                  type="button"
-                                  aria-label={t("toggle-password-visibility")}
-                                  className="absolute top-[50%] right-[10px] flex min-h-[44px] min-w-[44px] -translate-y-[50%] items-center justify-center border-0 bg-transparent p-0 text-base-content"
-                                  onClick={togglePasswordVisibility}
-                                >
-                                  {state.passwordVisible ? (
-                                    <i className="fa-light fa-eye-slash text-xs pb-1" /> // Close eye icon
-                                  ) : (
-                                    <i className="fa-light fa-eye text-xs pb-1 " /> // Open eye icon
-                                  )}
-                                </button>
-                              </div>
-                            <div className="relative mt-1">
-                              <NavLink
-                                to="/forgetpassword"
-                                className="text-[13px] op-link op-link-primary underline-offset-1 ml-1"
-                              >
-                                {t("forgot-password")}?
-                              </NavLink>
-                            </div>
-                          <div className="os-login-actions text-center text-xs font-bold">
+                          <div className="os-login-divider">
+                            {t("docsign-login-or-email")}
+                          </div>
+                        </>
+                      )}
+                      <form
+                        id="login-region-panel"
+                        onSubmit={handleLoginBtn}
+                        aria-label={t("Login-to-your-account")}
+                      >
+                        <label className="block text-xs" htmlFor="email">
+                          {t("email")}
+                        </label>
+                        <input
+                          id="email"
+                          type="email"
+                          className="op-input op-input-bordered op-input-sm hover:border-base-content w-full text-xs"
+                          name="email"
+                          autoComplete="username"
+                          value={state.email}
+                          onChange={handleChange}
+                          required
+                          onInvalid={(e) =>
+                            e.target.setCustomValidity(t("input-required"))
+                          }
+                          onInput={(e) => e.target.setCustomValidity("")}
+                        />
+                        <div className="mt-3">
+                          <label className="block text-xs" htmlFor="password">
+                            {t("password")}
+                          </label>
+                          <div className="relative">
+                            <input
+                              id="password"
+                              type={state.passwordVisible ? "text" : "password"}
+                              className="op-input op-input-bordered op-input-sm w-full text-xs pr-14"
+                              name="password"
+                              value={state.password}
+                              autoComplete="current-password"
+                              onChange={handleChange}
+                              onInvalid={(e) =>
+                                e.target.setCustomValidity(t("input-required"))
+                              }
+                              onInput={(e) => e.target.setCustomValidity("")}
+                              required
+                            />
                             <button
-                              type="submit"
-                              className="op-btn op-btn-primary"
-                              disabled={state.loading}
+                              type="button"
+                              aria-label={t("toggle-password-visibility")}
+                              aria-pressed={state.passwordVisible}
+                              className="absolute top-[50%] right-1 flex min-h-[44px] min-w-[44px] -translate-y-[50%] items-center justify-center rounded-md border-0 bg-transparent p-0 text-base-content"
+                              onClick={togglePasswordVisibility}
                             >
-                              {state.loading ? t("loading") : t("login")}
+                              {state.passwordVisible ? (
+                                <i className="fa-light fa-eye-slash text-xs pb-1" /> // Close eye icon
+                              ) : (
+                                <i className="fa-light fa-eye text-xs pb-1 " /> // Open eye icon
+                              )}
                             </button>
                           </div>
                         </div>
-                      </fieldset>
-                    </form>
+                        <div className="relative mt-1">
+                          <NavLink
+                            to="/forgetpassword"
+                            className="text-[13px] op-link op-link-primary underline-offset-1 ml-1"
+                          >
+                            {t("forgot-password")}?
+                          </NavLink>
+                        </div>
+                        <div className="os-login-actions text-center text-xs font-bold">
+                          <button
+                            type="submit"
+                            className="op-btn op-btn-primary"
+                            disabled={state.loading}
+                          >
+                            {state.loading ? t("loading") : t("login")}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
                   </div>
                 </div>
               </div>

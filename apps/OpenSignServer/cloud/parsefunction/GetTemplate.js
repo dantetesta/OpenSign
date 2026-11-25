@@ -32,6 +32,9 @@ export default async function GetTemplate(request) {
         extUserQuery.equalTo('Email', userEmail);
         extUserQuery.include('TeamIds');
         const extUser = await extUserQuery.first({ useMasterKey: true });
+        if (!extUser || extUser.get('IsDisabled') === true || !extUser.get('TenantId')?.id) {
+          return { error: "Template deleted or you don't have access." };
+        }
         if (extUser) {
           const _extUser = JSON.parse(JSON.stringify(extUser));
           if (_extUser?.TeamIds && _extUser.TeamIds?.length > 0) {
@@ -70,6 +73,10 @@ export default async function GetTemplate(request) {
         const res = await template.first({ useMasterKey: true });
         if (res) {
           const templateRes = JSON.parse(JSON.stringify(res));
+          if (templateRes?.ExtUserPtr?.TenantId?.objectId !== extUser.get('TenantId').id ||
+              (!extUser.get('TeamIds')?.length && templateRes?.ExtUserPtr?.objectId !== extUser.id)) {
+            return { error: "Template deleted or you don't have access." };
+          }
           delete templateRes?.ExtUserPtr?.TenantId?.FileAdapters;
           delete templateRes?.ExtUserPtr?.TenantId?.PfxFile;
           return templateRes;

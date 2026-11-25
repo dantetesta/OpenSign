@@ -1,0 +1,21 @@
+# Use with docker-compose.yml after building apps/OpenSign/build from this checkout.
+services:
+  server:
+    ports: !reset []
+    volumes:
+      - ./apps/OpenSignServer/index.js:/usr/src/app/index.js:ro
+      - ./apps/OpenSignServer/auth:/usr/src/app/auth:ro
+      - ./apps/OpenSignServer/cloud:/usr/src/app/cloud:ro
+      - ./apps/OpenSignServer/utils/resendEmail.js:/usr/src/app/utils/resendEmail.js:ro
+  mongo:
+    ports: !reset []
+  client:
+    ports: !reset []
+    env_file: !reset []
+    environment:
+      PUBLIC_URL: ${HOST_URL:-https://localhost:3001}
+      REACT_APP_SERVERURL: ${HOST_URL:-https://localhost:3001}/api/app
+      REACT_APP_DOCSIGN_GOOGLE_CLIENT_ID: ${DOCSIGN_GOOGLE_CLIENT_ID:-}
+    volumes:
+      - ./apps/OpenSign/build:/usr/src/app/build
+      - ./apps/OpenSign/entrypoint.sh:/usr/src/app/entrypoint.sh:ro

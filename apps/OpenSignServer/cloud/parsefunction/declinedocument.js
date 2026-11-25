@@ -57,36 +57,23 @@ export default async function declinedocument(request) {
     docCls.notEqualTo('IsCompleted', true);
     docCls.notEqualTo('IsArchive', true);
     const updateDoc = await docCls.get(docId, { useMasterKey: true });
-    if (updateDoc) {
-      const _doc = JSON.parse(JSON.stringify(updateDoc));
-      const isEnableOTP = updateDoc?.get('IsEnableOTP') || false;
-      const isCreator = _doc?.CreatedBy?.objectId === userId;
-      if (!isEnableOTP) {
-        updateDoc.set('IsDeclined', true);
-        updateDoc.set('DeclineReason', reason);
-        updateDoc.set('DeclineBy', declineBy);
-        await updateDoc.save(null, { useMasterKey: true });
-        if (!isCreator) {
-          sendDeclineMail(_doc, publicUrl, userId, reason);
-        }
-        return 'document declined';
-      } else {
-        if (!request?.user) {
-          throw new Parse.Error(Parse.Error.INVALID_SESSION_TOKEN, 'User is not authenticated.');
-        }
-        updateDoc.set('IsDeclined', true);
-        updateDoc.set('DeclineReason', reason);
-        updateDoc.set('DeclineBy', declineBy);
-        await updateDoc.save(null, { useMasterKey: true });
-        const isCreator = _doc?.CreatedBy?.objectId === request?.user?.id;
-        if (!isCreator) {
-          sendDeclineMail(_doc, publicUrl, userId, reason);
-        }
-        return 'document declined';
-      }
-    } else {
-      throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, 'Document not found.');
+    if (!updateDoc) {
+      throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, 'Document is unavailable.');
     }
+    const actor = request.user?.id;
+    const creator = updateDoc.get('CreatedBy')?.id;
+    if (!request.master && (!actor || actor !== userId ||
+        (actor !== creator && !updateDoc.getACL()?.getWriteAccess(actor)))) {
+      throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Document is unavailable.');
+    }
+    updateDoc.set('IsDeclined', true);
+    updateDoc.set('DeclineReason', reason);
+    updateDoc.set('DeclineBy', declineBy);
+    await updateDoc.save(null, { useMasterKey: true });
+    if (creator !== userId) {
+      await sendDeclineMail(updateDoc.toJSON(), publicUrl, userId, reason);
+    }
+    return 'document declined';
   } catch (err) {
     console.log('err while decling doc', err);
     throw err;

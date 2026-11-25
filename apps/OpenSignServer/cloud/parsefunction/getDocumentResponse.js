@@ -43,7 +43,6 @@ const documentResponseFields = [
   'RequestSubject',
   'HideSignerSigningLinks',
   'EideasyQueueId',
-  'EideasyQueueSecret',
 ];
 
 const extUserResponseFields = [

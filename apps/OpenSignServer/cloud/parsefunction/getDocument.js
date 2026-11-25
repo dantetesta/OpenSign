@@ -1,78 +1,41 @@
-import axios from 'axios';
-import { cloudServerUrl, serverAppId } from '../../Utils.js';
 import { projectDocumentResponse } from './getDocumentResponse.js';
+import { getDocumentReaderId, hasDocumentReadAccess } from './documentAccess.js';
 
 export default async function getDocument(request) {
-  const serverUrl = cloudServerUrl; //process.env.SERVER_URL;
   const docId = request.params.docId;
-  const include = request?.params?.include || '';
-  const sessiontoken = request?.headers?.sessiontoken || '';
+  const include = request.params.include || '';
+  if (typeof docId !== 'string' || !docId) {
+    return { error: 'Please pass required parameters!' };
+  }
+
   try {
-    if (docId) {
-      try {
-        const query = new Parse.Query('contracts_Document');
-        query.equalTo('objectId', docId);
-        query.include('ExtUserPtr');
-        query.include('ExtUserPtr.TenantId');
-        query.include('CreatedBy');
-        query.include('Signers');
-        query.include('AuditTrail.UserPtr');
-        query.include('Placeholders');
-        query.include('DeclineBy');
-        query.notEqualTo('IsArchive', true);
-        const requestedIncludes = String(include)
-          .split(',')
-          .map(field => field.trim())
-          .filter(field => field === 'Bcc' || field === 'Cc');
-        for (const field of requestedIncludes) {
-          query.include(field);
-        }
-        const res = await query.first({ useMasterKey: true });
-        if (res) {
-          const IsEnableOTP = res?.get('IsEnableOTP') || false;
-          const document = projectDocumentResponse(JSON.parse(JSON.stringify(res)), include);
-          if (!IsEnableOTP) {
-            return document;
-          } else {
-            if (sessiontoken) {
-              try {
-                const userRes = await axios.get(serverUrl + '/users/me', {
-                  headers: {
-                    'X-Parse-Application-Id': serverAppId,
-                    'X-Parse-Session-Token': sessiontoken,
-                  },
-                });
-                const userId = userRes.data && userRes.data?.objectId;
-                const acl = res.getACL();
-                if (userId && acl && acl.getReadAccess(userId)) {
-                  return document;
-                } else {
-                  return { error: "You don't have access of this document!" };
-                }
-              } catch (err) {
-                console.log('err user in not authenticated', err);
-                return { error: "You don't have access of this document!" };
-              }
-            } else {
-              return { error: "You don't have access of this document!" };
-            }
-          }
-        } else {
-          return { error: "document deleted or you don't have access." };
-        }
-      } catch (err) {
-        console.log('err', err);
-        return err;
-      }
-    } else {
-      return { error: 'Please pass required parameters!' };
+    const query = new Parse.Query('contracts_Document');
+    query.equalTo('objectId', docId);
+    query.include('ExtUserPtr');
+    query.include('ExtUserPtr.TenantId');
+    query.include('CreatedBy');
+    query.include('Signers');
+    query.include('AuditTrail.UserPtr');
+    query.include('Placeholders');
+    query.include('DeclineBy');
+    query.notEqualTo('IsArchive', true);
+    const requestedIncludes = String(include)
+      .split(',')
+      .map(field => field.trim())
+      .filter(field => field === 'Bcc' || field === 'Cc');
+    for (const field of requestedIncludes) {
+      query.include(field);
     }
-  } catch (err) {
-    console.log('err', err);
-    if (err.code == 209) {
-      return { error: 'Invalid session token' };
-    } else {
-      return { error: "You don't have access of this document!" };
+
+    const document = await query.first({ useMasterKey: true });
+    const denied = { error: "Document deleted or you don't have access." };
+    if (!document) return denied;
+    if (!request.master &&
+        !hasDocumentReadAccess(document, await getDocumentReaderId(request))) {
+      return denied;
     }
+    return projectDocumentResponse(document.toJSON(), include);
+  } catch {
+    return { error: "Document deleted or you don't have access." };
   }
 }

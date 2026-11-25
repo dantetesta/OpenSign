@@ -8,6 +8,7 @@ import GenerateCertificate from './pdf/GenerateCertificate.js';
 import { getSecureUrl } from '../../Utils.js';
 import { parseUploadFile } from '../../utils/fileUtils.js';
 import { resolveDeploymentBrand } from '../../utils/brandContext.js';
+import { getDocumentReaderId, hasDocumentReadAccess } from './documentAccess.js';
 dotenv.config({ quiet: true });
 const deploymentBrand = resolveDeploymentBrand();
 const eSignName = deploymentBrand.digitalSignature.name;
@@ -57,6 +58,9 @@ export default async function generateCertificatebydocId(req) {
       'ExtUserPtr,Signers,AuditTrail.UserPtr,Placeholders,ExtUserPtr.TenantId,ExtUserPtr.UserId'
     );
     const docRes = await getDocument.get(docId, { useMasterKey: true });
+    if (!docRes || (!req.master && !hasDocumentReadAccess(docRes, await getDocumentReaderId(req)))) {
+      throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, 'Document is unavailable.');
+    }
 
     if (docRes && docRes?.get('IsCompleted') && !docRes?.get('CertificateUrl')) {
       const _docRes = JSON.parse(JSON.stringify(docRes));

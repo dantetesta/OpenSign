@@ -14,6 +14,16 @@ export default defineConfig(({ mode, command }) => {
     plugins: [
       react(),
       svgr(), // Transform SVGs into React components
+      {
+        name: "opensign-runtime-environment",
+        apply: "build",
+        transformIndexHtml: {
+          order: "post",
+          handler: () => [
+            { tag: "script", attrs: { src: "/env.js" }, injectTo: "head-prepend" }
+          ]
+        }
+      },
       ...(localQaMode ? [localQaApiPlugin()] : [])
     ],
     resolve: { alias: {} }, // Add any necessary aliases here

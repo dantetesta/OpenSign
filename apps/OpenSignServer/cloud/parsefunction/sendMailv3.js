@@ -1,20 +1,23 @@
+import { defaultSenderEmail, isResendConfigured, sendResendEmail } from '../../utils/resendEmail.js';
 import formData from 'form-data';
 import Mailgun from 'mailgun.js';
 import { smtpenable, smtpsecure, normalizeMailSubject, updateMailCount } from '../../Utils.js';
 import { renderComplaintFooter, resolveBrandContext } from '../../utils/brandContext.js';
 import { createTransport } from 'nodemailer';
+import { getDocumentReaderId } from './documentAccess.js';
 async function sendMailProvider(req) {
   const brand = resolveBrandContext({});
   const extUserId = req.params?.extUserId || '';
   const senderEmail = '';
   const reportMsg = renderComplaintFooter(brand, extUserId, senderEmail);
 
+  const resendEnabled = isResendConfigured();
   const mailgunApiKey = process.env.MAILGUN_API_KEY;
   let transporterSMTP;
   try {
     let mailgunClient;
     let mailgunDomain;
-    if (smtpenable) {
+    if (!resendEnabled && smtpenable) {
       let transporterConfig = {
         host: process.env.SMTP_HOST,
         port: process.env.SMTP_PORT || 465,
@@ -33,7 +36,7 @@ async function sendMailProvider(req) {
       }
       transporterSMTP = createTransport(transporterConfig);
     } else {
-      if (mailgunApiKey) {
+      if (!resendEnabled && mailgunApiKey) {
         const mailgun = new Mailgun(formData);
         mailgunClient = mailgun.client({ username: 'api', key: mailgunApiKey });
         mailgunDomain = process.env.MAILGUN_DOMAIN;
@@ -41,7 +44,7 @@ async function sendMailProvider(req) {
     }
 
     const from = req.params.from || '';
-    const mailsender = smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER;
+    const mailsender = defaultSenderEmail(smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER);
     const replyto = req.params?.replyto || '';
     const messageParams = {
       from: from + ' <' + mailsender + '>',
@@ -54,9 +57,11 @@ async function sendMailProvider(req) {
       replyTo: replyto ? replyto : undefined,
     };
 
-    if (transporterSMTP) {
-      const res = await transporterSMTP.sendMail(messageParams);
-      console.log('smtp transporter res: ', res?.response);
+    if (resendEnabled || transporterSMTP) {
+      const res = resendEnabled
+              ? await sendResendEmail(messageParams)
+              : await transporterSMTP.sendMail(messageParams);
+      if (!resendEnabled) console.log('smtp transporter res: ', res?.response);
       if (!res.err) {
         if (extUserId) {
           await updateMailCount(extUserId);
@@ -90,6 +95,9 @@ async function sendMailProvider(req) {
 }
 
 async function sendmailv3(req) {
+  if (!req.master && !(await getDocumentReaderId(req))) {
+    throw new Parse.Error(Parse.Error.INVALID_SESSION_TOKEN, 'User is not authenticated.');
+  }
   const nonCustomMail = await sendMailProvider(req);
   return nonCustomMail;
 }

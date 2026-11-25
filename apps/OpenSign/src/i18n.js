@@ -2,6 +2,15 @@ import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import Backend from "i18next-http-backend";
 import LanguageDetector from "i18next-browser-languagedetector";
+import {
+  DEFAULT_LANGUAGE,
+  LANGUAGES,
+  LANGUAGE_STORAGE_KEY
+} from "./constant/language";
+
+i18n.on("languageChanged", (language) => {
+  document.documentElement.lang = language === "kr" ? "ko" : language;
+});
 
 i18n
   .use(Backend)
@@ -11,11 +20,12 @@ i18n
     backend: {
       loadPath: "/locales/{{lng}}/{{ns}}.json"
     },
-    fallbackLng: "en", // Fallback to English if no other language is detected
+    supportedLngs: LANGUAGES.map(({ value }) => value),
+    fallbackLng: { default: [DEFAULT_LANGUAGE, "en"], [DEFAULT_LANGUAGE]: ["en"] },
+    load: "currentOnly",
     detection: {
-      // Specifies the default language to fall back to if the detected language is not available.
-      order: ["localStorage", "navigator"],
-      // Defines where the detected language should be cached.
+      order: ["localStorage"],
+      lookupLocalStorage: LANGUAGE_STORAGE_KEY,
       caches: ["localStorage"]
     },
     ns: ["translation"], // default namespace
@@ -24,8 +34,7 @@ i18n
     debug: false,
     interpolation: {
       escapeValue: false // Not needed for react as it escapes by default
-    },
-    whitelist: ["en", "es", "fr", "it", "de", "hi", "kr"] // List of allowed languages
+    }
   });
 
 export default i18n;

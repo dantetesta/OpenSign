@@ -1,23 +1,10 @@
-import i18next from "i18next";
-import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { DEFAULT_LANGUAGE, LANGUAGES } from "../../constant/language";
 
 function SelectLanguage(props) {
-  const { i18n } = useTranslation();
-  const languages = [
-    { value: "en", text: "English" }, //english
-    { value: "es", text: "Española" }, //spanish
-    { value: "fr", text: "Français" }, //french
-    { value: "it", text: "Italiano" }, //italian
-    { value: "de", text: "Deutsch" }, //german
-    { value: "hi", text: "हिन्दी" }, //hindi
-    { value: "kr", text: "한국어" } //korean
-  ];
-  const defaultLanguage = i18next.language || "en";
-  const [lang, setLang] = useState(defaultLanguage);
-  // This function put query that helps to change the language
+  const { t, i18n } = useTranslation();
+  const language = i18n.resolvedLanguage || DEFAULT_LANGUAGE;
   const handleChangeLang = (e) => {
-    setLang(e.target.value);
     i18n.changeLanguage(e.target.value);
     props?.updateExtUser && props.updateExtUser({ language: e.target.value });
   };
@@ -28,17 +15,17 @@ function SelectLanguage(props) {
       } flex w-full justify-center items-center text-base-content`}
     >
       <select
-        value={lang}
+        aria-label={t("language")}
+        value={language}
         onChange={handleChangeLang}
         className={`${
           !props.isProfile ? " md:w-[15%] w-[50%]" : "w-full"
         } op-select op-select-bordered op-select-sm `}
       >
-        <option disabled>select</option>
-        {languages.map((item) => {
+        {LANGUAGES.map((item) => {
           return (
             <option key={item.value} value={item.value}>
-              {item.text}
+              {item.label}
             </option>
           );
         })}

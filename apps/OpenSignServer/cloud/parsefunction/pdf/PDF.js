@@ -406,20 +406,14 @@ async function PDF(req) {
     if (!resDoc) {
       throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, 'Document not found.');
     }
-    const IsEnableOTP = resDoc?.get('IsEnableOTP') || false;
-    // if `IsEnableOTP` is false then we don't have to check authentication
-    if (IsEnableOTP) {
-      if (!req?.user) {
-        throw new Parse.Error(Parse.Error.INVALID_SESSION_TOKEN, 'User is not authenticated.');
-      }
-    }
+    const actor = req.user?.id;
     const _resDoc = resDoc?.toJSON();
     let signUser;
     let className;
     // `reqUserId` is send throught pdfrequest signing flow
     if (reqUserId) {
       // to get contracts_Contactbook details for currentuser from reqUserId
-      const _contractUser = _resDoc.Signers.find(x => x.objectId === reqUserId);
+      const _contractUser = _resDoc.Signers?.find(x => x.objectId === reqUserId);
       if (_contractUser) {
         signUser = _contractUser;
         className = 'contracts_Contactbook';
@@ -427,6 +421,11 @@ async function PDF(req) {
     } else {
       className = 'contracts_Users';
       signUser = _resDoc.ExtUserPtr;
+    }
+    if (!req.master && (!actor || (reqUserId
+      ? signUser?.UserId?.objectId !== actor || resDoc.getACL()?.getReadAccess(actor) !== true
+      : _resDoc.CreatedBy?.objectId !== actor))) {
+      throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Document is unavailable.');
     }
     // Strict-order gating: when both `SendinOrder` and `SendInOrderStrict`
     // are enabled the document creator wants the signing flow locked to a

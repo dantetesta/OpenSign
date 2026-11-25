@@ -1,9 +1,9 @@
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl as presign } from '@aws-sdk/s3-request-presigner';
-import { useLocal } from '../../Utils.js';
+import { serverAppId, useLocal } from '../../Utils.js';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
-import { isAuthenticated } from '../../utils/AuthUtils.js';
+import { getDocumentReaderId, hasDocumentReadAccess } from './documentAccess.js';
 dotenv.config({ quiet: true });
 
 function extractKeyFromUrl(url) {
@@ -62,67 +62,65 @@ export default async function getPresignedUrl(url) {
   }
 }
 
-export async function getSignedUrl(request) {
+export function localFileAddress(value, serverUrl, appId) {
+  if (typeof value !== 'string' || !serverUrl || !appId) return null;
   try {
-    const docId = request.params.docId || '';
-    const templateId = request.params.templateId || '';
-    const url = request.params.url;
-
-    if (docId || templateId) {
-      try {
-        if (url?.includes('/files/')) {
-          return presignedlocalUrl(url);
-        } else if (useLocal !== 'true') {
-          const query = new Parse.Query(docId ? 'contracts_Document' : 'contracts_Template');
-          query.equalTo('objectId', docId ? docId : templateId);
-          query.include('ExtUserPtr.TenantId');
-          query.notEqualTo('IsArchive', true);
-          const res = await query.first({ useMasterKey: true });
-          if (!res) return url;
-
-          const _resDoc = res?.toJSON();
-          // Ensure user is authenticated if OTP is required
-          if (_resDoc?.IsEnableOTP) {
-            const isAuth = await isAuthenticated(request?.user);
-            if (!isAuth) {
-              throw new Parse.Error(
-                Parse.Error.INVALID_SESSION_TOKEN,
-                'User is not authenticated.'
-              );
-            }
-          }
-
-          const presignedUrl = await getPresignedUrl(url);
-          return presignedUrl;
-        } else {
-          return url;
-        }
-      } catch (err) {
-        console.log('Err in presigned url', err);
-        throw err;
-      }
-    } else {
-      const isAuth = await isAuthenticated(request?.user);
-      if (!isAuth) {
-        throw new Parse.Error(Parse.Error.INVALID_SESSION_TOKEN, 'User is not authenticated.');
-      } else {
-        if (url?.includes('/files/')) {
-          return presignedlocalUrl(url);
-        } else if (useLocal !== 'true') {
-          const presignedUrl = await getPresignedUrl(url);
-          return presignedUrl;
-        } else {
-          return url;
-        }
-      }
+    const server = new URL(serverUrl);
+    const file = new URL(value);
+    const prefix = server.pathname.replace(/\/$/, '') + '/files/' + encodeURIComponent(appId) + '/';
+    if (file.origin !== server.origin || file.username || file.password || file.hash ||
+        !file.pathname.startsWith(prefix) || !file.pathname.slice(prefix.length)) {
+      return null;
     }
-  } catch (err) {
-    console.log('error in getsignedurl', err);
-    const code = err.code || 400;
-    const msg = err.message;
-    const error = new Parse.Error(code, msg);
-    throw error;
+    return file.origin + file.pathname;
+  } catch {
+    return null;
   }
+}
+
+const documentFileFields = ['URL', 'SignedUrl', 'CertificateUrl'];
+
+function fileAddress(value) {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value);
+    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.hash) {
+      return null;
+    }
+    return url.origin + url.pathname;
+  } catch {
+    return null;
+  }
+}
+
+export async function getSignedUrl(request) {
+  const { docId, templateId, url } = request.params;
+  const address = fileAddress(url);
+  const denied = () => new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, 'File is unavailable.');
+  if (!address || (docId && templateId) || (docId && typeof docId !== 'string') ||
+      (templateId && typeof templateId !== 'string')) {
+    throw denied();
+  }
+
+  const local = localFileAddress(address, process.env.SERVER_URL, serverAppId);
+  const isValidReceipt = Boolean(local && new URL(url).searchParams.has('token') &&
+    await validateSignedLocalUrl(url) !== 'Unauthorized');
+  if (isValidReceipt) return url;
+  if (!docId && !templateId) throw denied();
+
+  const query = new Parse.Query(docId ? 'contracts_Document' : 'contracts_Template');
+  query.equalTo('objectId', docId || templateId);
+  query.notEqualTo('IsArchive', true);
+  const record = await query.first({ useMasterKey: true });
+  if (!record || !documentFileFields.some((field) => fileAddress(record.get(field)) === address)) {
+    throw denied();
+  }
+  if (!request.master && !hasDocumentReadAccess(record, await getDocumentReaderId(request))) {
+    throw denied();
+  }
+  if (local) return getSignedLocalUrl(local);
+  if (useLocal !== 'true') return getPresignedUrl(address);
+  throw denied();
 }
 
 // Function to generate a signed URL with JWT
@@ -188,7 +186,6 @@ export async function validateSignedLocalUrl(signedUrl) {
     // If the token is valid and not expired, return the file URL
     return signedUrl;
   } catch (error) {
-    console.log('Error validating file', error.message);
     return 'Unauthorized';
   }
 }

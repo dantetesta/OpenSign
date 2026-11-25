@@ -21,6 +21,7 @@ import ModalUi from "../primitives/ModalUi";
 import Loader from "../primitives/Loader";
 import { useTranslation } from "react-i18next";
 import SelectLanguage from "../components/pdf/SelectLanguage";
+import GoogleAuthButton, { isGoogleAuthEnabled } from "../components/GoogleAuthButton";
 
 function UserProfile() {
   const navigate = useNavigate();
@@ -516,6 +517,13 @@ function UserProfile() {
                     </div>
                   </div>
                 </section>
+                {isGoogleAuthEnabled() && extendUser?.[0]?.TenantId?.objectId && (
+                  <section className="os-profile-section">
+                    <h3>{t("docsign-google-link-title")}</h3>
+                    <p>{t("docsign-google-link-hint")}</p>
+                    <GoogleAuthButton mode="link" />
+                  </section>
+                )}
                 <section className="os-profile-section os-profile-language-section">
                   <div className="os-profile-section-heading">
                     <div>

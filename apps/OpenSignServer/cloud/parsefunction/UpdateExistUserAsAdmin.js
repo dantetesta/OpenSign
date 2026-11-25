@@ -41,10 +41,9 @@ async function updateUserExceptAdmin(data) {
 // `UpdateExistUserAsAdmin` is used to create admin from exist user records and transfer to org of admin
 export default async function UpdateExistUserAsAdmin(request) {
   const email = request.params.email;
-  const masterkey = request.params.masterkey;
   try {
-    if (masterkey !== process.env.MASTER_KEY) {
-      throw new Parse.Error(404, 'Invalid master key.');
+    if (!request.master) {
+      throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Administrator migration requires server access.');
     }
     const extClsQuery = new Parse.Query('contracts_Users');
     extClsQuery.equalTo('UserRole', 'contracts_Admin');
@@ -60,7 +59,6 @@ export default async function UpdateExistUserAsAdmin(request) {
       extCls.equalTo('Email', email);
       extCls.notEqualTo('IsDisabled', true);
       const extRes = await extCls.first({ useMasterKey: true });
-      console.log('extRes ', extRes);
       if (extRes) {
         const _extRes = JSON.parse(JSON.stringify(extRes));
         const tenantId = {

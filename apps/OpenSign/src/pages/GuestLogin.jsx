@@ -171,7 +171,8 @@ function GuestLogin() {
         };
         let body = {
           email: email?.toLowerCase()?.replace(/\s/g, ""),
-          otp: OTP
+          otp: OTP,
+          docId: documentId
         };
         let user = await axios.post(url, body, { headers: headers });
         if (user.data.result === "Invalid Otp") {

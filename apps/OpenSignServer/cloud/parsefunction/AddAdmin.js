@@ -98,6 +98,15 @@ async function saveUser(userDetails) {
 }
 export default async function AddAdmin(request) {
   const userDetails = request.params.userDetails;
+  if (!request.master) {
+    const members = new Parse.Query('contracts_Users');
+    const accounts = new Parse.Query(Parse.User);
+    if (userDetails?.role !== 'contracts_Admin' ||
+        await members.first({ useMasterKey: true }) ||
+        await accounts.first({ useMasterKey: true })) {
+      throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Initial administrator setup is unavailable.');
+    }
+  }
   const user = await saveUser(userDetails);
 
   try {

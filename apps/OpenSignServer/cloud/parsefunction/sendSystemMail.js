@@ -1,3 +1,4 @@
+import { defaultSenderEmail, isResendConfigured, sendResendEmail } from '../../utils/resendEmail.js';
 import formData from 'form-data';
 import Mailgun from 'mailgun.js';
 import { smtpenable, smtpsecure, normalizeMailSubject, updateMailCount } from '../../Utils.js';
@@ -9,12 +10,13 @@ async function sendMailProvider(req) {
   const senderEmail = '';
   const reportMsg = renderComplaintFooter(brand, extUserId, senderEmail);
 
+  const resendEnabled = isResendConfigured();
   const mailgunApiKey = process.env.MAILGUN_API_KEY;
   let transporterSMTP;
   try {
     let mailgunClient;
     let mailgunDomain;
-    if (smtpenable) {
+    if (!resendEnabled && smtpenable) {
       let transporterConfig = {
         host: process.env.SMTP_HOST,
         port: process.env.SMTP_PORT || 465,
@@ -33,7 +35,7 @@ async function sendMailProvider(req) {
       }
       transporterSMTP = createTransport(transporterConfig);
     } else {
-      if (mailgunApiKey) {
+      if (!resendEnabled && mailgunApiKey) {
         const mailgun = new Mailgun(formData);
         mailgunClient = mailgun.client({ username: 'api', key: mailgunApiKey });
         mailgunDomain = process.env.MAILGUN_DOMAIN;
@@ -41,7 +43,7 @@ async function sendMailProvider(req) {
     }
 
     const from = req.params.from || '';
-    const mailsender = smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER;
+    const mailsender = defaultSenderEmail(smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER);
     const replyto = req.params?.replyto || '';
     const messageParams = {
       from: from + ' <' + mailsender + '>',
@@ -53,9 +55,11 @@ async function sendMailProvider(req) {
       replyTo: replyto ? replyto : undefined,
     };
 
-    if (transporterSMTP) {
-      const res = await transporterSMTP.sendMail(messageParams);
-      console.log('smtp transporter res: ', res?.response);
+    if (resendEnabled || transporterSMTP) {
+      const res = resendEnabled
+              ? await sendResendEmail(messageParams)
+              : await transporterSMTP.sendMail(messageParams);
+      if (!resendEnabled) console.log('smtp transporter res: ', res?.response);
       if (!res.err) {
         if (extUserId) {
           await updateMailCount(extUserId);

@@ -134,6 +134,7 @@ async function sendMail(document, publicUrl) {
       const headers = {
         'Content-Type': 'application/json',
         'X-Parse-Application-Id': appId,
+        'X-Parse-Master-Key': process.env.MASTER_KEY,
       };
       const objectId = signerMail[i]?.signerObjId;
       const hostUrl = baseUrl.origin;

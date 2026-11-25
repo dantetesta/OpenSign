@@ -28,7 +28,7 @@ import {
 const HomeLayout = () => {
   const appName =
     "OpenSign™";
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const location = useLocation();
   const isEditorRoute = [
     "/draftDocument",
@@ -52,10 +52,7 @@ const HomeLayout = () => {
   const localQaIdentity = isLocalQaIdentityEnabled();
 
   useEffect(() => {
-    const language = localStorage.getItem("i18nextLng");
-    i18n.changeLanguage(language);
     localStorage.setItem("isGuestSigner", "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

@@ -19,6 +19,7 @@ import { SCALE_STEPS } from "./const";
 import { format, toZonedTime } from "date-fns-tz";
 
 import i18n from "../i18n";
+import { DEFAULT_LANGUAGE, LANGUAGE_STORAGE_KEY } from "./language";
 import { persistBrandPresentation } from "./brandPresentation";
 import { getRuntimePdfFontUrl } from "./runtimeConfig";
 import { renderMailBrandLogo, resolveMailBrandPresentation } from "./mailBrand";
@@ -936,7 +937,7 @@ export const signPdfFun = async (
     //qes: skip getTenantDetails when objectId is unavailable (QES redirect-back)
     if (objectId) {
       //get tenant details
-      const tenantDetails = await getTenantDetails(objectId);
+      const tenantDetails = await getTenantDetails(objectId, "", true, documentId);
       if (tenantDetails && tenantDetails === "user does not exist!") {
         return { status: "error", message: "User does not exist." };
       } else {
@@ -2899,7 +2900,8 @@ export const getAppLogo = async () => {
 export const getTenantDetails = async (
   objectId,
   contactId,
-  excludeCounts = false
+  excludeCounts = false,
+  docId
 ) => {
   try {
     const url = `${localStorage.getItem("baseUrl")}functions/gettenant`;
@@ -2909,7 +2911,8 @@ export const getTenantDetails = async (
     const data = {
       userId: objectId,
       contactId: contactId,
-      excludeCounts: excludeCounts
+      excludeCounts: excludeCounts,
+      docId
     };
     const res = await axios.post(url, data, {
       headers: {
@@ -2988,7 +2991,8 @@ export const handleSendOTP = async (email, { throwOnError = false } = {}) => {
     let url = `${localStorage.getItem("baseUrl")}functions/SendOTPMailV1`;
     const headers = {
       "Content-Type": "application/json",
-      "X-Parse-Application-Id": localStorage.getItem("parseAppId")
+      "X-Parse-Application-Id": localStorage.getItem("parseAppId"),
+      "X-Parse-Session-Token": Parse.User.current()?.getSessionToken()
     };
     const body = {
       email: email
@@ -3382,8 +3386,10 @@ export const getContainerScale = (pdfOriginalWH, pageNumber, containerWH) => {
 
 //function to get current laguage and set it in local
 export const saveLanguageInLocal = (i18n) => {
-  const detectedLanguage = i18n.language || "en";
-  localStorage.setItem("i18nextLng", detectedLanguage);
+  localStorage.setItem(
+    LANGUAGE_STORAGE_KEY,
+    i18n.resolvedLanguage || DEFAULT_LANGUAGE
+  );
 };
 
 // function to get default signature of current user from `contracts_Signature` class

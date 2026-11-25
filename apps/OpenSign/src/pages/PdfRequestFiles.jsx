@@ -234,7 +234,7 @@ function PdfRequestFiles(
   }, [redirectTimeLeft, isredirectCanceled, redirectUrl]);
 
 
-  const fetchTenantDetails = async (contactId) => {
+  const fetchTenantDetails = async (contactId, docId) => {
     const user = JSON.parse(
       localStorage.getItem(
         `Parse/${localStorage.getItem("parseAppId")}/currentUser`
@@ -244,7 +244,8 @@ function PdfRequestFiles(
       const tenantDetails = await getTenantDetails(
         user?.objectId, // userId
         contactId, // contactId
-        true // exclude unused tenant counts
+        true, // exclude unused tenant counts
+        docId
       );
       if (tenantDetails && tenantDetails === "user does not exist!") {
         alert(t("user-not-exist"));
@@ -282,7 +283,7 @@ function PdfRequestFiles(
         : contactBookId ||
           signerObjectId ||
           "";
-      const tenantSignTypes = await fetchTenantDetails(contactId);
+      const tenantSignTypes = await fetchTenantDetails(contactId, docId);
       // `currUserId` will be contactId or extUserId
       let currUserId;
 

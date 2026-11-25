@@ -1,3 +1,4 @@
+import { defaultSenderEmail } from '../../utils/resendEmail.js';
 import crypto from 'node:crypto';
 import { smtpenable } from '../../Utils.js';
 import { escapeHtml, renderEmailHeading, resolveBrandContext } from '../../utils/brandContext.js';
@@ -48,7 +49,7 @@ const sendOtp = async user => {
   let code = Math.floor(1000 + Math.random() * 9000);
   const brand = resolveBrandContext({});
   const AppName = brand.productName;
-  const sender = smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER;
+  const sender = defaultSenderEmail(smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER);
   await Parse.Cloud.sendEmail({
     sender: `${brand.senderName} <${sender}>`,
     recipient: email,

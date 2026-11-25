@@ -15,10 +15,13 @@ import { app as customRoute } from './cloud/customRoute/customApp.js';
 import { exec } from 'child_process';
 import { createTransport } from 'nodemailer';
 import { appName, cloudServerUrl, serverAppId, smtpenable, smtpsecure, useLocal } from './Utils.js';
+import { defaultSenderEmail, isResendConfigured, sendResendEmail } from './utils/resendEmail.js';
 import { resolveDeploymentBrand } from './utils/brandContext.js';
 import { SSOAuth } from './auth/authadapter.js';
+import { createDocSignGoogleRouter } from './auth/docsignGoogle.js';
 import runDbMigrations from './migrationdb/index.js';
 import { validateSignedLocalUrl } from './cloud/parsefunction/getSignedUrl.js';
+import { localUploadReceipt } from './auth/localFileReceipt.js';
 let fsAdapter;
 
 if (useLocal !== 'true') {
@@ -61,8 +64,8 @@ if (useLocal !== 'true') {
 let transporterMail;
 let mailgunClient;
 let mailgunDomain;
-let isMailAdapter = false;
-if (smtpenable) {
+let isMailAdapter = isResendConfigured();
+if (!isMailAdapter && smtpenable) {
   try {
     let transporterConfig = {
       host: process.env.SMTP_HOST,
@@ -87,7 +90,7 @@ if (smtpenable) {
     isMailAdapter = false;
     console.log(`Please provide valid SMTP credentials: ${err}`);
   }
-} else if (process.env.MAILGUN_API_KEY) {
+} else if (!isMailAdapter && process.env.MAILGUN_API_KEY) {
   try {
     const mailgun = new Mailgun(formData);
     mailgunClient = mailgun.client({
@@ -101,7 +104,7 @@ if (smtpenable) {
     console.log('Please provide valid Mailgun credentials');
   }
 }
-const mailsender = smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER;
+const mailsender = defaultSenderEmail(smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER);
 const deploymentSenderName = resolveDeploymentBrand().senderName;
 export const config = {
   databaseURI:
@@ -149,8 +152,10 @@ export const config = {
                 htmlPath: './files/verification_email.html',
               },
             },
-            apiCallback: async ({ payload, locale }) => {
-              if (mailgunClient) {
+            apiCallback: async ({ payload }) => {
+              if (isResendConfigured()) {
+                await sendResendEmail(payload);
+              } else if (mailgunClient) {
                 const mailgunPayload = ApiPayloadConverter.mailgun(payload);
                 await mailgunClient.messages.create(mailgunDomain, mailgunPayload);
               } else if (transporterMail) await transporterMail.sendMail(payload);
@@ -169,6 +174,7 @@ export const config = {
 // javascriptKey, restAPIKey, dotNetKey, clientKey
 
 export const app = express();
+app.use('/docsign-auth/google', createDocSignGoogleRouter());
 app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
@@ -227,6 +233,7 @@ if (!process.env.TESTING) {
   try {
     const server = new ParseServer(config);
     await server.start();
+    app.post(mountPath + '/files/:name', localUploadReceipt(process.env.SERVER_URL, serverAppId));
     app.use(mountPath, server.app);
   } catch (err) {
     console.log(err);

@@ -11,6 +11,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const runtimeKeys = [
+  "REACT_APP_DOCSIGN_GOOGLE_CLIENT_ID",
   "APP_LOGIN_ILLUSTRATION_URL",
   "REACT_APP_SERVERURL",
   "REACT_APP_LOGO_URL",

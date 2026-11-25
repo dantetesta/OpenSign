@@ -45,7 +45,7 @@ const STORAGE_KEYS = [
   "appLogo",
   "appname",
   "favicon",
-  "i18nextLng",
+  "opensignLanguage",
   "parseAppId",
   "baseUrl",
   `Parse/${LOCAL_QA_APP_ID}/currentUser`
@@ -106,7 +106,7 @@ function installLocalStorageIdentity(windowRef) {
   windowRef.localStorage.setItem("profileImg", "");
   windowRef.localStorage.setItem("appLogo", "");
   windowRef.localStorage.setItem("appname", "OpenSign™ Local QA");
-  windowRef.localStorage.setItem("i18nextLng", "en");
+  windowRef.localStorage.setItem("opensignLanguage", "en");
   windowRef.localStorage.setItem("parseAppId", LOCAL_QA_APP_ID);
   windowRef.localStorage.setItem(
     "baseUrl",

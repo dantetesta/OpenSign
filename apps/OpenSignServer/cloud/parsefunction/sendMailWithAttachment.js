@@ -1,3 +1,4 @@
+import { defaultSenderEmail, isResendConfigured, sendResendEmail } from '../../utils/resendEmail.js';
 import fs from 'node:fs';
 import https from 'https';
 import formData from 'form-data';
@@ -22,12 +23,13 @@ async function sendMailProvider(params) {
   const senderEmail = '';
   const reportMsg = renderComplaintFooter(brand, extUserId, senderEmail);
 
+  const resendEnabled = isResendConfigured();
   const mailgunApiKey = process.env.MAILGUN_API_KEY;
   let transporterSMTP;
   try {
     let mailgunClient;
     let mailgunDomain;
-    if (smtpenable) {
+    if (!resendEnabled && smtpenable) {
       let transporterConfig = {
         host: process.env.SMTP_HOST,
         port: process.env.SMTP_PORT || 465,
@@ -46,7 +48,7 @@ async function sendMailProvider(params) {
       }
       transporterSMTP = createTransport(transporterConfig);
     } else {
-      if (mailgunApiKey) {
+      if (!resendEnabled && mailgunApiKey) {
         const mailgun = new Mailgun(formData);
         mailgunClient = mailgun.client({ username: 'api', key: mailgunApiKey });
         mailgunDomain = process.env.MAILGUN_DOMAIN;
@@ -110,8 +112,8 @@ async function sendMailProvider(params) {
           const filename = params.filename;
           const file = {
             filename: filename || pdfName || 'exported.pdf',
-            content: smtpenable ? PdfBuffer : undefined,
-            data: smtpenable ? undefined : PdfBuffer,
+            content: (resendEnabled || smtpenable) ? PdfBuffer : undefined,
+            data: (resendEnabled || smtpenable) ? undefined : PdfBuffer,
           };
 
           let attachment;
@@ -122,8 +124,8 @@ async function sendMailProvider(params) {
               const certificateBuffer = fs.readFileSync(certificatePath);
               const certificate = {
                 filename: 'certificate.pdf',
-                content: smtpenable ? certificateBuffer : undefined, //fs.readFileSync('./exports/exported_file_1223.pdf'),
-                data: smtpenable ? undefined : certificateBuffer,
+                content: (resendEnabled || smtpenable) ? certificateBuffer : undefined, //fs.readFileSync('./exports/exported_file_1223.pdf'),
+                data: (resendEnabled || smtpenable) ? undefined : certificateBuffer,
               };
               attachment = [file, certificate];
             } catch (err) {
@@ -134,7 +136,7 @@ async function sendMailProvider(params) {
             attachment = [file];
           }
           const from = params.from || '';
-          const mailsender = smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER;
+          const mailsender = defaultSenderEmail(smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER);
           const replyto = params?.replyto || '';
           const messageParams = {
             from: from + ' <' + mailsender + '>',
@@ -142,8 +144,8 @@ async function sendMailProvider(params) {
             subject: normalizeMailSubject(params.subject),
             text: params.text || 'mail',
             html: params?.html ? params.html + reportMsg : '',
-            attachments: smtpenable ? attachment : undefined,
-            attachment: smtpenable ? undefined : attachment,
+            attachments: (resendEnabled || smtpenable) ? attachment : undefined,
+            attachment: (resendEnabled || smtpenable) ? undefined : attachment,
             bcc: params.bcc ? params.bcc : undefined,
             cc: params.cc ? params.cc : undefined,
             replyTo: replyto ? replyto : undefined,
@@ -152,9 +154,11 @@ async function sendMailProvider(params) {
             { path: certificatePath, label: 'certificate' },
             { path: testPdf, label: 'pdf' },
           ];
-          if (transporterSMTP) {
-            const res = await transporterSMTP.sendMail(messageParams);
-            console.log('smtp transporter res: ', res?.response);
+          if (resendEnabled || transporterSMTP) {
+            const res = resendEnabled
+              ? await sendResendEmail(messageParams)
+              : await transporterSMTP.sendMail(messageParams);
+            if (!resendEnabled) console.log('smtp transporter res: ', res?.response);
             if (!res.err) {
               if (extUserId) {
                 await updateMailCount(extUserId);
@@ -187,7 +191,7 @@ async function sendMailProvider(params) {
       }
     } else {
       const from = params.from || '';
-      const mailsender = smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER;
+      const mailsender = defaultSenderEmail(smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER);
       const replyto = params?.replyto || '';
       const messageParams = {
         from: from + ' <' + mailsender + '>',
@@ -200,9 +204,11 @@ async function sendMailProvider(params) {
         replyTo: replyto ? replyto : undefined,
       };
 
-      if (transporterSMTP) {
-        const res = await transporterSMTP.sendMail(messageParams);
-        console.log('smtp transporter res: ', res?.response);
+      if (resendEnabled || transporterSMTP) {
+        const res = resendEnabled
+              ? await sendResendEmail(messageParams)
+              : await transporterSMTP.sendMail(messageParams);
+        if (!resendEnabled) console.log('smtp transporter res: ', res?.response);
         if (!res.err) {
           if (extUserId) {
             await updateMailCount(extUserId);

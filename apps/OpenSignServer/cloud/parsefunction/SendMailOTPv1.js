@@ -1,84 +1,53 @@
+import { defaultSenderEmail } from '../../utils/resendEmail.js';
 import { smtpenable, updateMailCount } from '../../Utils.js';
+import { normalizeChallengeEmail, sendEmailChallenge } from '../../auth/emailChallenge.js';
 import { escapeHtml, renderEmailHeading, resolveBrandContext } from '../../utils/brandContext.js';
-async function getDocument(docId) {
-  try {
-    const query = new Parse.Query('contracts_Document');
-    query.equalTo('objectId', docId);
-    query.include('ExtUserPtr');
-    query.include('CreatedBy');
-    query.include('Signers');
-    query.include('AuditTrail.UserPtr');
-    query.include('ExtUserPtr.TenantId');
-    query.include('Placeholders');
-    query.notEqualTo('IsArchive', true);
-    const res = await query.first({ useMasterKey: true });
-    const _res = res?.toJSON();
-    return _res?.ExtUserPtr;
-  } catch (err) {
-    console.log('err ', err);
-  }
-}
-async function sendMailOTPv1(request) {
-  try {
-    let code = Math.floor(1000 + Math.random() * 9000);
-    let email = request.params.email;
-    let TenantId = request.params.TenantId ? request.params.TenantId : undefined;
-    const documentOwner = request.params?.docId
-      ? await getDocument(request.params.docId)
-      : undefined;
-    const brand = resolveBrandContext({});
-    const AppName = brand.productName;
 
-    if (email) {
-      const recipient = request.params.email;
-      const mailsender = smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER;
-      try {
-        await Parse.Cloud.sendEmail({
-          sender: brand.senderName + ' <' + mailsender + '>',
-          recipient: recipient,
-          subject: `Your ${AppName} OTP`,
-          text: 'otp email',
-          html:
-            `<html><head><meta http-equiv='Content-Type' content='text/html;charset=UTF-8' /></head><body><div style='background-color:#f5f5f5;padding:20px'><div style='background-color:white;'>${renderEmailHeading(brand, 'OTP Verification')}<div style='padding:20px;'><p style='font-family:system-ui;font-size:14px;'>Your OTP for ${escapeHtml(AppName)} verification is:</p><p style='text-decoration:none;font-weight:bolder;color:blue;font-size:45px;margin:20px;'>` +
-            code +
-            '</p></div></div></div></body></html>',
-        });
-        console.log('OTP sent', code);
-        if (documentOwner?.objectId) {
-          updateMailCount(documentOwner.objectId);
-        }
-      } catch (err) {
-        console.log('error in send OTP mail', err);
-      }
-      const tempOtp = new Parse.Query('defaultdata_Otp');
-      tempOtp.equalTo('Email', email);
-      const resultOTP = await tempOtp.first({ useMasterKey: true });
-      // console.log('resultOTP', resultOTP);
-      if (resultOTP !== undefined) {
-        const updateOtpQuery = new Parse.Query('defaultdata_Otp');
-        const updateOtp = await updateOtpQuery.get(resultOTP.id, {
-          useMasterKey: true,
-        });
-        updateOtp.set('OTP', code);
-        updateOtp.save(null, { useMasterKey: true });
-        //   console.log("update otp Res in tempSendOtp ", updateRes);
-      } else {
-        const otpClass = Parse.Object.extend('defaultdata_Otp');
-        const newOtpQuery = new otpClass();
-        newOtpQuery.set('OTP', code);
-        newOtpQuery.set('Email', email);
-        newOtpQuery.set('TenantId', TenantId);
-        await newOtpQuery.save(null, { useMasterKey: true });
-        //   console.log("new otp Res in tempSendOtp ", newRes);
-      }
-      return 'Otp send';
-    } else {
-      return 'Please Enter valid email';
-    }
-  } catch (err) {
-    console.log('err in sendMailOTPv1');
-    console.log(err);
-    return err;
-  }
+async function getInvitedDocument(docId, email) {
+  if (typeof docId !== 'string' || !docId || docId.length > 128) return null;
+  const query = new Parse.Query('contracts_Document');
+  query.equalTo('objectId', docId);
+  query.equalTo('SentToOthers', true);
+  query.notEqualTo('IsArchive', true);
+  query.include('Signers');
+  query.include('Placeholders.signerPtr');
+  const document = await query.first({ useMasterKey: true });
+  if (!document) return null;
+  const signers = document.get('Signers') || [];
+  const widgets = document.get('Placeholders') || [];
+  const invited = signers.some(signer => normalizeChallengeEmail(signer.get?.('Email')) === email) ||
+    widgets.some(item => item.Role !== 'prefill' && [
+      item.email, item.signerPtr?.get?.('Email'), item.signerPtr?.Email,
+    ].some(value => normalizeChallengeEmail(value) === email));
+  return invited ? document : null;
 }
-export default sendMailOTPv1;
+
+export default async function sendMailOTPv1(request) {
+  const email = normalizeChallengeEmail(request.params.email);
+  const docId = request.params.docId;
+  const denied = () => new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Verification unavailable.');
+  if (!email) throw denied();
+
+  const document = docId ? await getInvitedDocument(docId, email) : null;
+  if ((docId && !document) || (!docId && normalizeChallengeEmail(request.user?.get('email')) !== email)) {
+    throw denied();
+  }
+
+  const brand = resolveBrandContext({});
+  const sender = defaultSenderEmail(smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER);
+  const sent = await sendEmailChallenge(email, docId, async code => {
+    await Parse.Cloud.sendEmail({
+      sender: brand.senderName + ' <' + sender + '>',
+      recipient: email,
+      subject: brand.productName + ' — verification code',
+      text: 'Verification code: ' + code,
+      html: '<div style="font-family:system-ui;padding:20px">' +
+        renderEmailHeading(brand, 'Verification code') + '<p>Verification code for ' +
+        escapeHtml(brand.productName) + ': <strong>' + code + '</strong></p></div>',
+    });
+  });
+  if (!sent) throw denied();
+  const extendedOwnerId = document?.get('ExtUserPtr')?.id;
+  if (extendedOwnerId) updateMailCount(extendedOwnerId);
+  return 'Otp send';
+}
